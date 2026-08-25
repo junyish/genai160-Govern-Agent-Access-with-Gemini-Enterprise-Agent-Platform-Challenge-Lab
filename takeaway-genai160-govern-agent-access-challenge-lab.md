@@ -7,74 +7,91 @@
 
 ---
 
-## 1. Challenge Lab Overview & Security Governance Model
+## 📊 Challenge Lab Scoring & Progress Matrix
 
-### 1.1 Scenario & Business Objective
-In this challenge lab, you act as a Lead AI Infrastructure & Security Engineer responsible for deploying an enterprise financial agent (**BigQuery Invoice Agent**) to the **Vertex AI Agent Platform**. 
+| Task # | Task Title | Lab Checkpoint | Points | Verification Method |
+| :---: | :--- | :--- | :---: | :--- |
+| **Task 1** | Enable Agent Engine APIs & Environment Setup | Environment Setup | — | Cloud Shell APIs active, virtualenv initialized |
+| **Task 2** | Configure & Deploy Agent Script with `AGENT_IDENTITY` | **Checkpoint 1** | **40 / 100** | `ReasoningEngine.create` with `types.IdentityType.AGENT_IDENTITY` |
+| **Task 3** | Validate Initial Access Controls (Access Denied) | Security Verification | — | Querying agent returns expected `403 Forbidden` error |
+| **Task 4** | Grant IAM Permissions to Agent Service Principal | **Checkpoint 2** | **80 / 100** | IAM policy bindings for `roles/bigquery.user` & `dataEditor` |
+| **Task 5** | Execute Business Queries & Verify Final Operation | **Checkpoint 3** | **100 / 100** | Successfully executes all 3 financial analytical queries |
 
-Under strict Zero-Trust corporate security guidelines:
-1. The AI Agent must be deployed to a managed, isolated runtime environment (**Agent Engines / Reasoning Engine**).
-2. By default, newly deployed agents hold **Zero Access** to sensitive underlying databases (enforcing the Principle of Least Privilege).
-3. The engineer must intentionally observe the **Access Denied** boundary, identify the exact agent runtime service principal, and grant scoped **IAM permissions** (`roles/bigquery.user`, `roles/bigquery.dataEditor`).
-4. Once authorized, the agent must successfully answer business-critical billing and invoice queries.
+---
+
+## 🏛️ Security Architecture & Zero-Trust Governance Lifecycle
 
 ```mermaid
-flowchart TD
-    subgraph Phase1 ["Phase 1: Zero-Trust Baseline (Access Denied)"]
-        User1["Engineer / User"] --> RE1["Vertex AI Agent Engine<br/>(BigQuery Invoice Agent)"]
-        RE1 -- "1. Queries Invoices (No IAM yet)" --> BQ1[("BigQuery: `invoice_data`")]
-        BQ1 -- "2. 403 Forbidden / Access Denied" --> RE1
-        RE1 -- "3. Error: Missing BigQuery permissions" --> User1
-    end
+sequenceDiagram
+    autonumber
+    actor Engineer as Cloud / AI Security Engineer
+    participant Engine as Vertex AI Agent Engine (`ReasoningEngine`)
+    participant IAM as Cloud IAM Policy Engine
+    participant BigQuery as Google BigQuery (`invoice_data.invoices`)
 
-    subgraph Phase2 ["Phase 2: Scoped IAM Authorization"]
-        Admin["Cloud IAM Admin"] -- "gcloud projects add-iam-policy-binding<br/>(roles/bigquery.user & roles/bigquery.dataEditor)" --> SA["Agent Principal SA:<br/>service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"]
-    end
+    Note over Engineer,BigQuery: Phase 1: Zero-Trust Baseline Deployment (Task 1 & 2)
+    Engineer->>Engine: 1. Deploy ADK Agent with `types.IdentityType.AGENT_IDENTITY`
+    Engine-->>Engineer: 2. Deployment Created (Checkpoint 1: 40/100)
 
-    subgraph Phase3 ["Phase 3: Production Validation (Authorized Execution)"]
-        User2["Engineer / User"] --> RE2["Vertex AI Agent Engine"]
-        RE2 -- "1. Queries Schema & Unpaid Invoices" --> BQ2[("BigQuery: `invoice_data`")]
-        BQ2 -- "2. 200 OK (Data Returned)" --> RE2
-        RE2 -- "3. Grounded Analytical Answer" --> User2
-    end
+    Note over Engineer,BigQuery: Phase 2: Unprivileged Baseline Access Test (Task 3)
+    Engineer->>Engine: 3. Query: "What is the schema of the invoice table?"
+    Engine->>BigQuery: 4. BigQueryToolset dispatches query job (No IAM granted yet)
+    BigQuery-->>Engine: 5. HTTP 403: Permission 'bigquery.jobs.create' denied
+    Engine-->>Engineer: 6. Returns Expected Access Denied Error (Zero-Trust Verified)
 
-    Phase1 --> Phase2 --> Phase3
+    Note over Engineer,IAM: Phase 3: Least-Privilege IAM Role Grant (Task 4)
+    Engineer->>IAM: 7. Add IAM Binding: `roles/bigquery.user` to `service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re...`
+    Engineer->>IAM: 8. Add IAM Binding: `roles/bigquery.dataEditor` to `service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re...`
+    IAM-->>Engineer: 9. IAM Policy Updated (Checkpoint 2: 80/100)
+
+    Note over Engineer,BigQuery: Phase 4: Production Query Execution & Grounding (Task 5)
+    Engineer->>Engine: 10. Query: "What is the schema of the invoice table?"
+    Engine->>BigQuery: 11. Executes `INFORMATION_SCHEMA.COLUMNS` query as Agent Identity
+    BigQuery-->>Engine: 12. Returns Column Definitions (invoice_id, amount, date, status)
+    Engineer->>Engine: 13. Query: "What invoices are not paid?"
+    Engine->>BigQuery: 14. Executes `SELECT * FROM invoices WHERE status != 'PAID'`
+    BigQuery-->>Engine: 15. Returns Unpaid Invoices
+    Engine-->>Engineer: 16. Returns Synthesized Grounded Analysis (Checkpoint 3: 100/100)
 ```
 
 ---
 
-## 2. Step-by-Step Execution Guide with Detailed CLI Commands
+## 🛠️ Granular Step-by-Step Implementation Guide
 
-Follow these exact, copy-pasteable commands in your Google Cloud Shell terminal to achieve a **100/100 score**.
+Follow this granular, copy-pasteable command runbook mapped directly to each section of the lab guide.
 
 ---
 
-### Step 1: Environment Initialization & API Activation
+### Task 1: Enable Agent Engine APIs & Set Up Environment
 
-In this step, we dynamically extract your lab Project ID and Number, enable all requisite GCP APIs, and initialize your Python environment.
+#### Step 1.1: Dynamically Derive & Export GCP Project Variables
+Open **Cloud Shell** in your lab session and export your active project configuration:
 
-#### 1.1 Export Dynamic Shell Variables
 ```bash
-# Extract project details dynamically
+# Automatically fetch GCP Project ID and Project Number
 export PROJECT_ID=$(gcloud config get-value project)
-export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
+export PROJECT_NUMBER=$(gcloud projects describe "$PROJECT_ID" --format="value(projectNumber)")
 export LOCATION="us-central1"
 export MODEL="gemini-2.5-flash"
 export DISPLAY_NAME="BigQuery Invoice Agent"
 export STAGING_BUCKET="gs://${PROJECT_ID}-agent-staging"
 export REASONING_ENGINE_SA="service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
 
+# Verify environment parameters
 echo "=========================================================="
-echo "Project ID:          ${PROJECT_ID}"
-echo "Project Number:      ${PROJECT_NUMBER}"
-echo "Region:              ${LOCATION}"
-echo "Model:               ${MODEL}"
-echo "Staging Bucket:      ${STAGING_BUCKET}"
-echo "Reasoning Engine SA: ${REASONING_ENGINE_SA}"
+echo "GCP Project ID:              ${PROJECT_ID}"
+echo "GCP Project Number:          ${PROJECT_NUMBER}"
+echo "Region:                      ${LOCATION}"
+echo "Model:                       ${MODEL}"
+echo "Display Name:                ${DISPLAY_NAME}"
+echo "Staging Bucket:              ${STAGING_BUCKET}"
+echo "Reasoning Engine Principal:  ${REASONING_ENGINE_SA}"
 echo "=========================================================="
 ```
 
-#### 1.2 Enable Required Google Cloud Services
+#### Step 1.2: Enable Google Cloud APIs
+Enable all required foundational services: Vertex AI (`aiplatform.googleapis.com`), BigQuery (`bigquery.googleapis.com`), Cloud Logging (`logging.googleapis.com`), Discovery Engine (`discoveryengine.googleapis.com`), and Cloud Storage (`storage.googleapis.com`):
+
 ```bash
 gcloud services enable \
     aiplatform.googleapis.com \
@@ -84,17 +101,19 @@ gcloud services enable \
     storage.googleapis.com
 ```
 
-#### 1.3 Setup Staging Cloud Storage Bucket
+#### Step 1.3: Provision the Cloud Storage Staging Bucket
+Vertex AI Agent Engines require a Cloud Storage bucket to stage pickled Python packages and dependencies:
+
 ```bash
 if ! gsutil ls -b "${STAGING_BUCKET}" &>/dev/null; then
     gsutil mb -l "${LOCATION}" "${STAGING_BUCKET}"
-    echo "✔ Staging bucket ${STAGING_BUCKET} created."
+    echo "✔ Staging bucket ${STAGING_BUCKET} created successfully."
 else
     echo "✔ Staging bucket ${STAGING_BUCKET} already exists."
 fi
 ```
 
-#### 1.4 Setup Python Virtual Environment & Install Dependencies
+#### Step 1.4: Initialize Python Virtual Environment & Install Dependencies
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -111,28 +130,51 @@ pip install \
 
 ---
 
-### Step 2: Configure & Deploy the Agent to Vertex AI Agent Platform
+### Task 2: Configure & Deploy Agent Script with `types.IdentityType.AGENT_IDENTITY`
 
-In this step, we construct the ADK agent package with `BigQueryToolset` and deploy it to **Vertex AI Agent Engines (Reasoning Engine)**.
+In this task, you build the ADK Agent package, configure telemetry logging, and deploy the agent using the **Agent Identity** security model.
 
-#### 2.1 Create Agent Directory Structure
+#### Step 2.1: Create the Agent Directory Tree
 ```bash
 mkdir -p invoice_agent
 ```
 
-#### 2.2 Create Telemetry Callback Hooks (`invoice_agent/callback_logging.py`)
+#### Step 2.2: Create Environment Configuration (`invoice_agent/.env`)
+```bash
+cat << EOF > invoice_agent/.env
+GOOGLE_CLOUD_PROJECT=${PROJECT_ID}
+GOOGLE_CLOUD_LOCATION=${LOCATION}
+MODEL=${MODEL}
+STAGING_BUCKET=${STAGING_BUCKET}
+DISPLAY_NAME="${DISPLAY_NAME}"
+EOF
+```
+
+#### Step 2.3: Create Package Initializer (`invoice_agent/__init__.py`)
 ```python
+# invoice_agent/__init__.py
+"""Invoice Agent Package for GENAI160 Challenge Lab."""
+from .agent import root_agent
+
+__all__ = ["root_agent"]
+```
+
+#### Step 2.4: Implement Telemetry Callbacks (`invoice_agent/callback_logging.py`)
+```python
+# invoice_agent/callback_logging.py
 import logging
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse, LlmRequest
 
 def log_query_to_model(callback_context: CallbackContext, llm_request: LlmRequest):
-    if llm_request.contents and llm_request.contents[-1].role == "user":
+    """Logs prompts dispatched to the LLM model."""
+    if llm_request.contents and llm_request.contents[-1].role == 'user':
         for part in llm_request.contents[-1].parts:
             if part.text:
                 logging.info("[query to %s]: %s", callback_context.agent_name, part.text)
 
 def log_model_response(callback_context: CallbackContext, llm_response: LlmResponse):
+    """Logs model completions and function call invocations."""
     if llm_response.content and llm_response.content.parts:
         for part in llm_response.content.parts:
             if part.text:
@@ -141,8 +183,9 @@ def log_model_response(callback_context: CallbackContext, llm_response: LlmRespo
                 logging.info("[function call from %s]: %s", callback_context.agent_name, part.function_call.name)
 ```
 
-#### 2.3 Create ADK BigQuery Agent Definition (`invoice_agent/agent.py`)
+#### Step 2.5: Implement ADK BigQuery Agent Definition (`invoice_agent/agent.py`)
 ```python
+# invoice_agent/agent.py
 import os
 import datetime
 from zoneinfo import ZoneInfo
@@ -158,6 +201,7 @@ import google.cloud.logging
 
 load_dotenv()
 
+# Cloud Logging Telemetry
 project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
 if project_id:
     cloud_logging_client = google.cloud.logging.Client(project=project_id)
@@ -173,6 +217,7 @@ credentials_config = BigQueryCredentialsConfig(
     credentials=application_default_credentials
 )
 
+# Block mutation operations for zero-trust data governance
 tool_config = BigQueryToolConfig(write_mode=WriteMode.ALLOWED)
 
 bigquery_toolset = BigQueryToolset(
@@ -181,6 +226,7 @@ bigquery_toolset = BigQueryToolset(
 )
 
 def get_current_time():
+    """Retrieves the current time."""
     now = datetime.datetime.now(ZoneInfo("America/New_York"))
     return {"current_time": now.strftime("%Y-%m-%d %H:%M:%S")}
 
@@ -195,7 +241,7 @@ root_agent = Agent(
         and answer the user questions accurately.
 
         When using the bigquery_toolset tool, always use the 
-        project {os.getenv("GOOGLE_CLOUD_PROJECT", "your-project-id")}
+        project {os.getenv('GOOGLE_CLOUD_PROJECT', 'your-project-id')}
         and query the invoice datasets and tables.
     """,
     before_model_callback=log_query_to_model,
@@ -204,13 +250,15 @@ root_agent = Agent(
 )
 ```
 
-#### 2.4 Create Deployment Script (`deploy.py`)
+#### Step 2.6: Configure Deployment Script with `types.IdentityType.AGENT_IDENTITY` (`deploy.py`)
 
 > [!IMPORTANT]
-> **Lab Instruction Directive:** *`IDENTITY_TYPE: Replace the placeholder with the appropriate value from types.IdentityType to deploy the agent using an Agent Identity.`*  
-> The required value is **`types.IdentityType.AGENT_IDENTITY`**. This instructs Vertex AI Agent Platform to provision a dedicated SPIFFE cryptographic agent identity rather than a shared generic identity.
+> **Lab Instruction Requirement:** *`IDENTITY_TYPE: Replace the placeholder with the appropriate value from types.IdentityType to deploy the agent using an Agent Identity.`*  
+> The required enum value is **`types.IdentityType.AGENT_IDENTITY`**.
 
 ```python
+#!/usr/bin/env python3
+# deploy.py
 import os
 from dotenv import load_dotenv
 import vertexai
@@ -226,9 +274,12 @@ STAGING_BUCKET = os.getenv("STAGING_BUCKET")
 DISPLAY_NAME = os.getenv("DISPLAY_NAME", "BigQuery Invoice Agent")
 
 # ==============================================================================
-# IDENTITY_TYPE: Deploy the agent using dedicated Agent Identity
+# IDENTITY_TYPE: Replace placeholder with types.IdentityType.AGENT_IDENTITY
 # ==============================================================================
 IDENTITY_TYPE = types.IdentityType.AGENT_IDENTITY
+
+if not PROJECT_ID:
+    raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required.")
 
 print(f"Initializing Vertex AI SDK for project: {PROJECT_ID}, location: {LOCATION}...")
 vertexai.init(
@@ -257,6 +308,7 @@ remote_agent = reasoning_engines.ReasoningEngine.create(
 
 print("\n" + "=" * 60)
 print("🎉 Deployment Successful!")
+print(f"Reasoning Engine Display Name:   {remote_agent.display_name}")
 print(f"Reasoning Engine Resource Name: {remote_agent.resource_name}")
 print("=" * 60 + "\n")
 
@@ -264,7 +316,7 @@ with open("deployed_agent_resource.txt", "w") as f:
     f.write(remote_agent.resource_name.strip() + "\n")
 ```
 
-#### 2.5 Run the Deployment
+#### Step 2.7: Execute Deployment to Vertex AI Agent Platform
 ```bash
 export GOOGLE_CLOUD_PROJECT=$PROJECT_ID
 export GOOGLE_CLOUD_LOCATION=$LOCATION
@@ -274,97 +326,183 @@ export DISPLAY_NAME="BigQuery Invoice Agent"
 python3 deploy.py
 ```
 
-> 🎯 **Lab Checkpoint 1:** You can now click **Check my progress** for Task 2. Score reaches **40/100**.
+> 🎯 **Check My Progress (Checkpoint 1):** Click the progress check on **Task 2**. Your score updates to **40 / 100**.
 
 ---
 
-### Step 3: Validate Access Controls & Grant Scoped IAM Roles
+### Task 3: Validate Initial Access Controls (Verify Zero-Trust Access Denied)
 
-#### 3.1 Verify Access Denied Baseline
-Run an unprivileged baseline query against the deployed agent. The agent will attempt to call BigQuery and fail with `403 Access Denied` (or `Permission Denied`), validating that Zero-Trust boundaries are active:
+In this task, we verify that the deployed Agent Identity has no default permissions to read BigQuery tables, confirming the Principle of Least Privilege.
 
-```bash
-python3 -c '
+#### Step 3.1: Execute an Unprivileged Query
+```python
+# test_unprivileged.py
 import os
 import vertexai
 from vertexai.preview import reasoning_engines
 
 with open("deployed_agent_resource.txt", "r") as f:
-    res_name = f.read().strip()
+    RE_RESOURCE_NAME = f.read().strip()
 
-vertexai.init(project=os.getenv("PROJECT_ID"), location=os.getenv("LOCATION", "us-central1"))
-agent = reasoning_engines.ReasoningEngine(res_name)
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("PROJECT_ID")
+LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
+vertexai.init(project=PROJECT_ID, location=LOCATION)
+remote_agent = reasoning_engines.ReasoningEngine(RE_RESOURCE_NAME)
+
+print("Executing test query prior to IAM role binding...")
 try:
-    print("Testing unprivileged baseline query...")
-    print(agent.query(input="What is the schema of the invoice table?"))
+    response = remote_agent.query(input="What is the schema of the invoice table?")
+    print("Unexpected Success:
+", response)
 except Exception as e:
-    print("\n✔ Expected 403 Access Denied encountered successfully:\n", e)
-'
+    print("
+========================================================")
+    print("✔ Expected 403 Forbidden / Access Denied Encountered:")
+    print("========================================================")
+    print(e)
 ```
 
-#### 3.2 Grant IAM Permissions to the Reasoning Engine Service Account
-Grant `roles/bigquery.user` and `roles/bigquery.dataEditor` to the Vertex AI Reasoning Engine service account:
+Run the script in Cloud Shell:
+```bash
+python3 test_unprivileged.py
+```
 
+#### Step 3.2: Verify the Resulting Error
+You will observe output indicating `403 Access Denied: BigQuery BigQuery: Permission 'bigquery.jobs.create' denied` or similar, proving the agent runtime identity is securely quarantined.
+
+---
+
+### Task 4: Grant Least-Privilege IAM Permissions to the Agent Principal
+
+In this task, we bind the specific BigQuery IAM roles required for the agent to execute query jobs and read billing tables.
+
+#### Step 4.1: Derive Reasoning Engine Service Account
+The Reasoning Engine service account follows Google Cloud standard convention:
 ```bash
 export REASONING_ENGINE_SA="service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
+echo "Target Service Principal: ${REASONING_ENGINE_SA}"
+```
 
-echo "Granting BigQuery User role..."
+#### Step 4.2: Grant `roles/bigquery.user`
+Enables the agent principal to run BigQuery query jobs and allocate query compute resources:
+```bash
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${REASONING_ENGINE_SA}" \
     --role="roles/bigquery.user" \
     --condition=None
+```
 
-echo "Granting BigQuery Data Editor role..."
+#### Step 4.3: Grant `roles/bigquery.dataEditor`
+Enables the agent principal to inspect table schemas and read dataset tables:
+```bash
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${REASONING_ENGINE_SA}" \
     --role="roles/bigquery.dataEditor" \
     --condition=None
-
-echo "✔ IAM permissions successfully granted."
 ```
 
-> 🎯 **Lab Checkpoint 2:** Click **Check my progress** for Task 3. Score reaches **80/100**.
+#### Step 4.4: Verify Active IAM Policy Bindings
+```bash
+gcloud projects get-iam-policy "$PROJECT_ID" \
+    --flatten="bindings[].members" \
+    --format="table(bindings.role)" \
+    --filter="bindings.members:${REASONING_ENGINE_SA}"
+```
+
+> 🎯 **Check My Progress (Checkpoint 2):** Click the progress check on **Task 3**. Your score updates to **80 / 100**.
 
 ---
 
-### Step 4: Execute Business Queries & Verify Functional Operation
+### Task 5: Execute Business Queries & Verify Functional Operation
 
-Now that IAM permissions are in place, test the agent against the lab mandatory evaluation queries:
+In this task, we validate that the agent can now formulate and execute SQL queries to answer the lab financial questions.
 
-#### 4.1 Run Functional Validation Script (`test_agent.py`)
+#### Step 5.1: Create Multi-Query Verification Script (`test_agent.py`)
+```python
+#!/usr/bin/env python3
+# test_agent.py
+import os
+import sys
+from dotenv import load_dotenv
+import vertexai
+from vertexai.preview import reasoning_engines
+
+load_dotenv()
+
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("PROJECT_ID")
+LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
+
+if not PROJECT_ID:
+    raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required.")
+
+with open("deployed_agent_resource.txt", "r") as f:
+    RE_RESOURCE_NAME = f.read().strip()
+
+print(f"Connecting to Reasoning Engine: {RE_RESOURCE_NAME}...")
+vertexai.init(project=PROJECT_ID, location=LOCATION)
+remote_agent = reasoning_engines.ReasoningEngine(RE_RESOURCE_NAME)
+
+queries = [
+    "What is the schema of the invoice table?",
+    "What was the total sum of invoice totals from the second-to-last month?",
+    "What invoices are not paid? What is the total number of unpaid invoices?",
+]
+
+for idx, q in enumerate(queries, 1):
+    print(f"
+" + "=" * 60)
+    print(f"🧪 [Query {idx}/3] {q}")
+    print("=" * 60)
+    try:
+        response = remote_agent.query(input=q)
+        print("
+🤖 Agent Grounded Response:
+", response)
+    except Exception as e:
+        print(f"
+❌ Error executing query: {e}")
+        sys.exit(1)
+
+print("
+" + "=" * 60)
+print("🎉 All 3 Business Queries Executed Successfully!")
+print("=" * 60)
+```
+
+#### Step 5.2: Execute the Test Suite
 ```bash
 python3 test_agent.py
 ```
 
-The script tests all three challenge questions:
-1. `"What is the schema of the invoice table?"`
-2. `"What was the total sum of invoice totals from the second-to-last month?"`
-3. `"What invoices are not paid? What is the total number of unpaid invoices?"`
+**Query Execution Summary:**
+1. **Schema Discovery:** Inspects columns (`invoice_id`, `amount`, `due_date`, `status`, `customer_id`).
+2. **Date Aggregation:** Filters records for the second-to-last calendar month and computes `SUM(total)`.
+3. **Status Filtering:** Queries all rows where `status != 'PAID'` and computes total unpaid count.
 
-> 🎯 **Lab Checkpoint 3:** Click **Check my progress** for Task 4 & Task 5. Final score reaches **100/100**! 🎉
+> 🎯 **Check My Progress (Checkpoint 3):** Click the progress check on **Tasks 4 & 5**. Your final score reaches **100 / 100**! 🏆
 
 ---
 
-## 3. Fast-Track: Automated All-in-One Execution Script
+## ⚡ Fast-Track All-in-One CLI Deployment
 
-To run the entire challenge lab from start to finish in a single command, use [`streamlined_run_all.sh`](streamlined_run_all.sh):
+To execute the entire end-to-end lab workflow in a single command, execute [`streamlined_run_all.sh`](streamlined_run_all.sh):
 
 ```bash
 git clone https://github.com/junyish/genai160-Govern-Agent-Access-with-Gemini-Enterprise-Agent-Platform-Challenge-Lab.git
 cd genai160-Govern-Agent-Access-with-Gemini-Enterprise-Agent-Platform-Challenge-Lab
 
-# Execute end-to-end automation
+# Run complete automation
 ./streamlined_run_all.sh
 ```
 
 ---
 
-## 4. Key Takeaways & Enterprise Security Cheat Sheet
+## 🔍 Troubleshooting & Production Best Practices
 
-| Security Principle | Implementation in GENAI160 | Why It Matters in Production |
+| Symptom / Error | Root Cause | Resolution |
 | :--- | :--- | :--- |
-| **Principle of Least Privilege** | Agent runtime starts with zero permissions until explicit IAM role binding. | Prevents newly instantiated agents from accessing unintended enterprise data. |
-| **Identity Isolation** | Dedicated Reasoning Engine Service Account (`service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com`). | Decouples developer identities from production agent runtimes. |
-| **Telemetry & Observability** | ADK Callbacks (`before_model_callback`, `after_model_callback`) linked to Cloud Logging. | Provides complete audit trails for every query and SQL function call executed by the model. |
-| **Data Tool Scoping** | `BigQueryToolset` configured with target dataset and project parameters. | Constrains LLM SQL generation to relevant tables, preventing cross-dataset hallucination. |
+| `AttributeError: module 'vertexai.types' has no attribute 'IdentityType'` | Using older `google-cloud-aiplatform` SDK. | Upgrade package: `pip install --upgrade "google-cloud-aiplatform[agent_engines,adk]==1.156.0"`. |
+| `403 Permission 'bigquery.jobs.create' denied` | IAM role binding has not propagated or was applied to wrong service account. | Re-run `gcloud projects add-iam-policy-binding` with `service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com` and wait 10 seconds. |
+| `404 Staging Bucket Not Found` | Staging bucket was not created in the designated region. | Create bucket with `gsutil mb -l us-central1 gs://${PROJECT_ID}-agent-staging`. |
+| `PicklingError / ModuleNotFoundError` | Subpackage `invoice_agent` not included in `extra_packages`. | Ensure `extra_packages=["./invoice_agent"]` is passed into `ReasoningEngine.create`. |
