@@ -3,26 +3,25 @@
 > **Challenge Lab Reference:** `GENAI160 / Lab ID 631982 / Course Template 1749`  
 > **Lab Guide Link:** [Govern Agent Access with Gemini Enterprise & Agent Platform: Challenge Lab (Lab 631982)](https://partner.skills.google/course_templates/1749/labs/631982)  
 > **Target Track:** Google Cloud Agent Development Kit (ADK) & Vertex AI Agent Platform  
-> **Goal:** Deploy an enterprise BigQuery invoice agent with isolated **Agent Identity**, enforce Zero-Trust access boundaries, grant least-privilege IAM permissions, and achieve a **100/100 score**.
+> **Goal:** Deploy an enterprise BigQuery invoice agent with isolated **Agent Identity**, grant least-privilege IAM permissions (`roles/bigquery.user` and `roles/bigquery.dataEditor`), and achieve a **100/100 score**.
 
 ---
 
-## 🎯 Lab Checkpoints & Scoring Roadmap
+## 🎯 Lab Tasks & Checkpoint Scoring Matrix
 
-| Task | Objective | Checkpoint | Points | Verification Method |
-| :---: | :--- | :--- | :---: | :--- |
-| **Task 1** | Enable APIs, Setup Staging Bucket & Seed Dataset | Environment Setup | — | `gcloud services enable` & `bq load` |
-| **Task 2** | Deploy Agent with `types.IdentityType.AGENT_IDENTITY` | **Checkpoint 1** | **40 / 100** | `python3 deploy.py` |
-| **Task 3** | Validate Initial Access Controls (Verify Access Denied) | Security Verification | — | `python3 test_unprivileged.py` |
-| **Task 4** | Grant Least-Privilege IAM Roles to Agent Principal | **Checkpoint 2** | **80 / 100** | `gcloud projects add-iam-policy-binding` |
-| **Task 5** | Execute Business Queries & Verify Final Operation | **Checkpoint 3** | **100 / 100** | `python3 test_agent.py` |
+| Lab Task | Objective | Checkpoint Points | Verification Action |
+| :---: | :--- | :---: | :--- |
+| **Task 1** | Enable APIs, Create Staging Bucket & Seed BigQuery Dataset | Baseline Setup | `gcloud services enable` & `bq load` |
+| **Task 2** | Configure & Deploy BigQuery Agent with `AGENT_IDENTITY` | **40 / 100** | Click **Check my progress** on Task 2 |
+| **Task 3** | Grant **BigQuery User** & **BigQuery Data Editor** to Agent Principal | **80 / 100** | Click **Check my progress** on Task 3 |
+| **Task 4** | Query the Agent & Verify Grounded Business Answers | **100 / 100** | Click **Check my progress** on Task 4 |
 
 ---
 
-## 📋 Task 1: Enable APIs & Set Up Environment
+## 📋 Task 1: Enable APIs, Setup Staging Bucket & Seed Dataset
 
 ### Step 1.1: Derive and Export Environment Variables in Cloud Shell
-Open the Google Cloud Shell terminal in your lab environment and run the following command to automatically detect and export your dynamic project attributes:
+Open the Google Cloud Shell terminal in your lab environment and run the following commands:
 
 ```bash
 # Export active project ID and numerical project number
@@ -48,9 +47,7 @@ echo "=========================================================="
 
 ---
 
-### Step 1.2: Enable Google Cloud Services
-Enable all required APIs for Vertex AI Agent Engines, BigQuery, Cloud Logging, Discovery Engine, and Cloud Storage:
-
+### Step 1.2: Enable Required Google Cloud APIs
 ```bash
 gcloud services enable \
     aiplatform.googleapis.com \
@@ -65,8 +62,6 @@ gcloud services enable \
 ---
 
 ### Step 1.3: Provision the Cloud Storage Staging Bucket
-Vertex AI Agent Engines require a regional Cloud Storage bucket to stage pickled agent code artifacts:
-
 ```bash
 if ! gsutil ls -b "${STAGING_BUCKET}" &>/dev/null; then
     gsutil mb -l "${LOCATION}" "${STAGING_BUCKET}"
@@ -78,22 +73,17 @@ fi
 
 ---
 
-### Step 1.4: Copy or Initialize the `bigquery_agent_installer` Directory
-If your lab pre-stages the installer in your project bucket:
+### Step 1.4: Clone or Copy Starter Code
 ```bash
-gcloud storage cp -r gs://${PROJECT_ID}-bucket/bigquery_agent_installer . 2>/dev/null || true
-cd bigquery_agent_installer 2>/dev/null || true
-```
-Or if cloning from this repository:
-```bash
-git clone https://github.com/junyish/genai160-Govern-Agent-Access-with-Gemini-Enterprise-Agent-Platform-Challenge-Lab.git
-cd genai160-Govern-Agent-Access-with-Gemini-Enterprise-Agent-Platform-Challenge-Lab
+# Clone the complete lab repository
+git clone https://github.com/junyish/genai160-Govern-Agent-Access-with-Gemini-Enterprise-Agent-Platform-Challenge-Lab.git lab-genai160
+cd lab-genai160
 ```
 
 ---
 
 ### Step 1.5: Seed BigQuery Dataset & Invoices Table
-Create the BigQuery dataset `pool_data` and populate `pool_data.invoices` with historical billing records from `past_invoices.csv`:
+Create dataset `pool_data` and populate `pool_data.invoices` with 15 historical records from `past_invoices.csv`:
 
 ```bash
 # 1. Create dataset
@@ -107,7 +97,7 @@ bq --project_id="${PROJECT_ID}" --location=US load \
   "${PROJECT_ID}:pool_data.invoices" ./past_invoices.csv
 ```
 
-**Verification:** Verify the table was created and loaded:
+**Verification:** Check loaded record count:
 ```bash
 bq query --use_legacy_sql=false \
   "SELECT count(*) as total_invoices FROM \`${PROJECT_ID}.pool_data.invoices\`"
@@ -116,21 +106,17 @@ bq query --use_legacy_sql=false \
 
 ---
 
-### Step 1.6: Initialize Python Virtual Environment & Install Dependencies
+### Step 1.6: Install Python Dependencies
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-
-pip install -r requirements.txt
+export PATH="${PATH}:/home/${USER}/.local/bin"
+python3 -m pip install -q -r requirements.txt
 ```
 
 ---
 
-## 📋 Task 2: Configure & Deploy the Agent with `AGENT_IDENTITY`
+## 📋 Task 2: Configure & Deploy the BigQuery Agent (Checkpoint: 40/100)
 
 ### Step 2.1: Write the `.env` Configuration File
-Generate the `.env` file in the working directory and inside `bigquery_agent/`:
-
 ```bash
 cat << EOF > .env
 GOOGLE_GENAI_USE_VERTEXAI=TRUE
@@ -146,18 +132,15 @@ cp .env bigquery_agent/.env
 
 ---
 
-### Step 2.2: Configure `deploy.py` with `types.IdentityType.AGENT_IDENTITY`
+### Step 2.2: Verify `deploy.py` Configuration
+In `deploy.py`, ensure `identity_type` is configured with `types.IdentityType.AGENT_IDENTITY`:
 
-> [!IMPORTANT]
-> **Lab Instruction Requirement:** *`IDENTITY_TYPE: Replace the placeholder with the appropriate value from types.IdentityType to deploy the agent using an Agent Identity.`*  
-> The required value is `types.IdentityType.AGENT_IDENTITY`.
-
-Ensure `deploy.py` contains:
 ```python
 # deploy.py snippet
 from vertexai._genai import types
 
 IDENTITY_TYPE = types.IdentityType.AGENT_IDENTITY
+STAGING_BUCKET = os.environ.get("STAGING_BUCKET", f"gs://{project}-bucket")
 
 config = {
     "display_name": DISPLAY_NAME,
@@ -165,126 +148,67 @@ config = {
     "staging_bucket": STAGING_BUCKET,
     "python_version": "3.12",
     "requirements": requirements,
-    "extra_packages": ["./bigquery_agent"],
+    "extra_packages": [f"./{AGENT_PACKAGE}"],
     "env_vars": {
-        "GOOGLE_GENAI_USE_VERTEXAI": "TRUE",
-        "GOOGLE_CLOUD_LOCATION": LOCATION,
-        "MODEL": MODEL_VERSION,
-            },
+        "GOOGLE_GENAI_USE_VERTEXAI": os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "TRUE"),
+        "GOOGLE_CLOUD_LOCATION": location,
+        "MODEL": os.environ.get("MODEL", MODEL_VERSION),
+    },
 }
 ```
 
 ---
 
-### 💡 Exact Code Diffs & Improvements in `deploy.py` (Task 2 / 2.1)
-
-Below is the side-by-side comparison between the lab template placeholder and our production-improved `deploy.py`:
-
-```diff
-- # Placeholder in starter code:
-- IDENTITY_TYPE = ... # REPLACE WITH types.IdentityType
-- STAGING_BUCKET = "gs://qwiklabs-gcp-01-22c08ca0a932-bucket"
-
-+ # Production Improved Implementation:
-+ from vertexai._genai import types
-+ IDENTITY_TYPE = types.IdentityType.AGENT_IDENTITY
-+ STAGING_BUCKET = os.environ.get("STAGING_BUCKET", f"gs://{project}-bucket")
-+
-+ config = {
-+     "display_name": DISPLAY_NAME,
-+     "identity_type": IDENTITY_TYPE,
-+     "staging_bucket": STAGING_BUCKET,
-+     "python_version": "3.12",
-+     "requirements": requirements,
-+     "extra_packages": [f"./{AGENT_PACKAGE}"],
-+     "env_vars": {
-+         "GOOGLE_GENAI_USE_VERTEXAI": os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "TRUE"),
-+         "GOOGLE_CLOUD_LOCATION": location,
-+         "MODEL": os.environ.get("MODEL", MODEL_VERSION),
-+         +     },
-+ }
-+
-+ remote_agent = client.agent_engines.create(agent=local_agent, config=config)
-+ with open("deployed_agent_resource.txt", "w") as f:
-+     f.write(resource_name_str.strip() + "\n")
-```
-
-### Step 2.3: Execute the Deployment
-Launch the deployment to Vertex AI Agent Platform:
-
+### Step 2.3: Execute Deployment to Agent Platform
 ```bash
 python3 deploy.py
 ```
 
-**Expected Deployment Log Output:**
+**Expected Output:**
 ```text
-Initializing Vertex AI SDK for project 'qwiklabs-gcp-...' in location 'us-central1'...
-Deploying 'bigquery_agent' as 'BigQuery Invoice Agent' to Agent Runtime with Agent Identity (IdentityType.AGENT_IDENTITY)...
-This typically takes 3-7 minutes.
+Deploying 'bigquery_agent' as 'BigQuery Invoice Agent' to Agent Runtime with an Agent Identity...
+This typically takes 5-10 minutes.
 
-============================================================
-🎉 Agent Deployed Successfully!
-Resource Name: projects/1234567890/locations/us-central1/reasoningEngines/1122334455667788
-============================================================
-Saved resource name to 'deployed_agent_resource.txt'
+Agent deployed successfully!
+Resource Name: projects/.../locations/us-central1/reasoningEngines/...
 ```
 
 ---
 
 ### 🎯 Checkpoint 1 (Score: 40 / 100)
-1. Navigate to the lab browser window.
-2. Under **Task 2**, click **Check my progress**.
-3. Verify your score updates from **0/100 -> 40/100**.
+1. In the lab guide under **Task 2**, click **Check my progress**.
+2. Verify your score increases to **40 / 100**.
 
 ---
 
-## 📋 Task 3: Validate Initial Access Controls (Zero-Trust Baseline Check)
-
-Under Google Cloud's Zero-Trust model, an agent deployed with **Agent Identity** has **zero default IAM permissions**. In this task, we verify that the unprivileged agent cannot read BigQuery data.
-
----
-
-### Step 3.1: Execute Unprivileged Query Against Reasoning Engine
-Run the `test_unprivileged.py` script:
-
+### 💡 (Optional Security Check) Test Unprivileged Access Denied
+Run the unprivileged test script to verify that Zero-Trust is active before granting IAM roles:
 ```bash
 python3 test_unprivileged.py
 ```
+*Expected Output:* `403 Forbidden / Access Denied` (confirms agent has 0 ambient access).
 
 ---
 
-### Step 3.2: Verify Expected `403 Forbidden` / Access Denied Error
-**Observed Terminal Output:**
-```text
-Connecting to Reasoning Engine: projects/1234567890/locations/us-central1/reasoningEngines/1122334455667788...
-Executing test query PRIOR to IAM role binding (Task 3)...
+## 📋 Task 3: Grant IAM Roles to the Agent Identity Principal (Checkpoint: 80/100)
 
-========================================================
-✔ Expected 403 Forbidden / Access Denied Encountered:
-========================================================
-403 Access Denied: BigQuery BigQuery: Permission 'bigquery.jobs.create' denied on project ...
-
-This confirms that the agent runtime is securely quarantined under Zero-Trust!
-```
+> [!IMPORTANT]
+> **Lab Requirement for Task 3:** Grant **BOTH** of the following roles to the Agent Identity principal:
+> 1. **BigQuery User** (`roles/bigquery.user`) — Enables running SQL queries and allocating compute jobs.
+> 2. **BigQuery Data Editor** (`roles/bigquery.dataEditor`) — Enables reading and writing table data in the `pool_data` dataset.
 
 ---
 
-## 📋 Task 4: Grant Least-Privilege IAM Roles to Agent Principal
-
-Now we grant the agent identity the exact two IAM roles required to run query jobs and read the billing dataset.
-
----
-
-### Step 4.1: Derive the Agent Principal Service Account
-The Reasoning Engine service agent format is:
+### Step 3.1: Identify the Agent Identity Principal
+The Reasoning Engine service principal format is:
 ```bash
 export REASONING_ENGINE_SA="service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
-echo "Target Service Principal: ${REASONING_ENGINE_SA}"
+echo "Target Principal: ${REASONING_ENGINE_SA}"
 ```
 
 ---
 
-### Step 4.2: Grant `roles/bigquery.user` (Job Execution & Allocation)
+### Step 3.2: Grant Role 1 — BigQuery User (`roles/bigquery.user`)
 ```bash
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${REASONING_ENGINE_SA}" \
@@ -294,7 +218,7 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 ---
 
-### Step 4.3: Grant `roles/bigquery.dataEditor` (Dataset & Table Read/Write)
+### Step 3.3: Grant Role 2 — BigQuery Data Editor (`roles/bigquery.dataEditor`)
 ```bash
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${REASONING_ENGINE_SA}" \
@@ -304,14 +228,15 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 
 ---
 
-### Step 4.4: Verify IAM Policy Bindings
+### Step 3.4: Verify IAM Roles Assigned to Principal
 ```bash
 gcloud projects get-iam-policy "$PROJECT_ID" \
     --flatten="bindings[].members" \
     --format="table(bindings.role)" \
     --filter="bindings.members:${REASONING_ENGINE_SA}"
 ```
-*Expected Output:*
+
+**Expected Verification Output:**
 ```text
 ROLE
 roles/bigquery.dataEditor
@@ -321,30 +246,29 @@ roles/bigquery.user
 ---
 
 ### 🎯 Checkpoint 2 (Score: 80 / 100)
-1. Navigate to the lab browser window.
-2. Under **Task 3 / Task 4**, click **Check my progress**.
-3. Verify your score updates from **40/100 -> 80/100**.
+1. In the lab guide under **Task 3**, click **Check my progress**.
+2. Verify your score increases to **80 / 100**.
 
 ---
 
-## 📋 Task 5: Execute Business Queries & Verify Final Operation
+## 📋 Task 4: Query the Agent & Verify Grounded Business Answers (Checkpoint: 100/100)
 
-In this final task, we send the required business analytical queries to the agent to verify end-to-end data grounding.
+Now that the Agent Identity has permissions, execute the validation queries in the Cloud Shell or Playground.
 
 ---
 
-### Step 5.1: Run the Automated Validation Test Suite
+### Step 4.1: Run the Automated Validation Test Script
 ```bash
 python3 test_agent.py
 ```
 
 ---
 
-### Step 5.2: Lab Business Queries & Expected Answers
+### Step 4.2: Lab Business Queries & Expected Answers
 
-#### Query 1: Schema Discovery
-* **Prompt:** `"What is the schema of the invoices table?"`
-* **Agent Output:** Lists table columns:
+#### Query 1: Schema Inspection
+* **Question:** `"What is the schema of the invoices table?"`
+* **Result:** Returns columns:
   - `invoice_date (DATE)`
   - `date_processed (DATE)`
   - `invoice_id (STRING)`
@@ -352,39 +276,24 @@ python3 test_agent.py
   - `invoice_total (FLOAT)`
   - `payment_status (STRING)`
 
-#### Query 2: Date Aggregation & Historical Total
-* **Prompt:** `"What was the total sum of the invoice totals that arrived in April 2026?"`
-* **Generated SQL:** `SELECT SUM(invoice_total) FROM \`pool_data.invoices\` WHERE EXTRACT(YEAR FROM invoice_date) = 2026 AND EXTRACT(MONTH FROM invoice_date) = 4`
-* **Agent Output:** **`$7,672.85`**
+#### Query 2: Sum of Invoices in April 2026
+* **Question:** `"What was the total sum of the invoice totals that arrived in April 2026?"`
+* **Result:** **`$7,672.85`**
 
-#### Query 3: Conditional Status Filtering
-* **Prompt:** `"What invoices are not paid? What is the total number of unpaid invoices?"`
-* **Generated SQL:** `SELECT invoice_id, vendor_name, invoice_total FROM \`pool_data.invoices\` WHERE payment_status = 'UNPAID'`
-* **Agent Output:** Lists the unpaid invoices and confirms the total count is **`6`**.
+#### Query 3: Count and List of Unpaid Invoices
+* **Question:** `"What invoices are not paid? What is the total number of unpaid invoices?"`
+* **Result:** **`6`** unpaid invoices.
 
 ---
 
 ### 🎯 Checkpoint 3 (Final Score: 100 / 100) 🎉
-1. In the lab guide, click **Check my progress** on **Task 5**.
-2. Confirm your total score is **100 / 100**!
+1. In the lab guide under **Task 4**, click **Check my progress**.
+2. Confirm your total score reaches **100 / 100**! 🏆
 
 ---
 
-## ⚡ Fast-Track All-in-One CLI Command
-
-For instant zero-click completion, run the automated runner script:
+## ⚡ Instant All-in-One Shortcut Command
 
 ```bash
-./streamlined_run_all.sh
+cd ~ && rm -rf lab-run && git clone https://github.com/junyish/genai160-Govern-Agent-Access-with-Gemini-Enterprise-Agent-Platform-Challenge-Lab.git lab-run && cd lab-run && chmod +x streamlined_run_all.sh && ./streamlined_run_all.sh
 ```
-
----
-
-## 🛠️ Quick Troubleshooting Guide
-
-| Issue | Root Cause | Solution |
-| :--- | :--- | :--- |
-| `AttributeError: module 'vertexai._genai.types' has no attribute 'IdentityType'` | Outdated vertexai library in environment. | Run `pip install --upgrade "google-cloud-aiplatform[agent_engines]>=1.157.0"`. |
-| Query still returns `403 Forbidden` after Task 4 | IAM propagation delay across GCP regions. | Wait 10-15 seconds for IAM policy sync and re-run `python3 test_agent.py`. |
-| `Dataset pool_data not found` | BigQuery dataset was not initialized in US location. | Run `bq --location=US mk --force --dataset ${PROJECT_ID}:pool_data`. |
-| `Bucket not found during deploy` | Staging bucket does not exist. | Run `gsutil mb -l us-central1 gs://${PROJECT_ID}-bucket`. |
