@@ -177,6 +177,40 @@ config = {
 
 ---
 
+### 💡 Exact Code Diffs & Improvements in `deploy.py` (Task 2 / 2.1)
+
+Below is the side-by-side comparison between the lab template placeholder and our production-improved `deploy.py`:
+
+```diff
+- # Placeholder in starter code:
+- IDENTITY_TYPE = ... # REPLACE WITH types.IdentityType
+- STAGING_BUCKET = "gs://qwiklabs-gcp-01-22c08ca0a932-bucket"
+
++ # Production Improved Implementation:
++ from vertexai._genai import types
++ IDENTITY_TYPE = types.IdentityType.AGENT_IDENTITY
++ STAGING_BUCKET = os.environ.get("STAGING_BUCKET", f"gs://{project}-bucket")
++
++ config = {
++     "display_name": DISPLAY_NAME,
++     "identity_type": [IDENTITY_TYPE],
++     "staging_bucket": STAGING_BUCKET,
++     "python_version": "3.12",
++     "requirements": requirements,
++     "extra_packages": [f"./{AGENT_PACKAGE}"],
++     "env_vars": {
++         "GOOGLE_GENAI_USE_VERTEXAI": os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "TRUE"),
++         "GOOGLE_CLOUD_LOCATION": location,
++         "MODEL": os.environ.get("MODEL", MODEL_VERSION),
++         "GOOGLE_CLOUD_PROJECT": project,
++     },
++ }
++
++ remote_agent = client.agent_engines.create(agent=local_agent, config=config)
++ with open("deployed_agent_resource.txt", "w") as f:
++     f.write(resource_name_str.strip() + "\n")
+```
+
 ### Step 2.3: Execute the Deployment
 Launch the deployment to Vertex AI Agent Platform:
 
