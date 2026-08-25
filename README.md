@@ -68,9 +68,14 @@ chmod +x streamlined_run_all.sh
 
 ---
 
-## 📋 Manual Step-by-Step Command Line Flow
+## 📚 Guides & Documentation
 
-For the complete in-depth guide with code explanations, refer to [**`takeaway-genai160-govern-agent-access-challenge-lab.md`**](takeaway-genai160-govern-agent-access-challenge-lab.md).
+- 🚀 **[Granular Step-by-Step Instruction Guide](step-by-step-instruction-guide.md):** Complete task-by-task, command-by-command operational runbook to complete the lab and achieve **100/100 points**.
+- 🏛️ **[Architectural Takeaways & Learning Guide](takeaway-genai160-govern-agent-access-challenge-lab.md):** High-level architectural analysis covering Zero-Trust security, SPIFFE-based Agent Identity, Application Default Credentials (ADC) propagation, IAM least privilege, and production observability.
+
+---
+
+## 📋 Manual Step-by-Step Command Line Flow
 
 ### 1. Initialize Environment
 ```bash
