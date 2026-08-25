@@ -81,7 +81,6 @@ config = {
         "GOOGLE_GENAI_USE_VERTEXAI": os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "TRUE"),
         "GOOGLE_CLOUD_LOCATION": location,
         "MODEL": os.environ.get("MODEL", MODEL_VERSION),
-        "GOOGLE_CLOUD_PROJECT": project,
     },
 }
 

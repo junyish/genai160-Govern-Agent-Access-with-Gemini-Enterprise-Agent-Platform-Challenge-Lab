@@ -170,8 +170,7 @@ config = {
         "GOOGLE_GENAI_USE_VERTEXAI": "TRUE",
         "GOOGLE_CLOUD_LOCATION": LOCATION,
         "MODEL": MODEL_VERSION,
-        "GOOGLE_CLOUD_PROJECT": PROJECT_ID,
-    },
+            },
 }
 ```
 
@@ -202,8 +201,7 @@ Below is the side-by-side comparison between the lab template placeholder and ou
 +         "GOOGLE_GENAI_USE_VERTEXAI": os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "TRUE"),
 +         "GOOGLE_CLOUD_LOCATION": location,
 +         "MODEL": os.environ.get("MODEL", MODEL_VERSION),
-+         "GOOGLE_CLOUD_PROJECT": project,
-+     },
++         +     },
 + }
 +
 + remote_agent = client.agent_engines.create(agent=local_agent, config=config)
