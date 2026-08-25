@@ -22,7 +22,7 @@ from dotenv import load_dotenv
 import vertexai
 from vertexai import types
 from vertexai.preview import reasoning_engines
-from invoice_agent.agent import root_agent
+from bigquery_agent.agent import root_agent
 
 load_dotenv()
 
@@ -64,7 +64,7 @@ remote_agent = reasoning_engines.ReasoningEngine.create(
     display_name=DISPLAY_NAME,
     identity_type=IDENTITY_TYPE,
     description="Agent to query and govern BigQuery invoice and billing data.",
-    extra_packages=["./invoice_agent"],
+    extra_packages=["./bigquery_agent"],
 )
 
 print("\n" + "=" * 60)

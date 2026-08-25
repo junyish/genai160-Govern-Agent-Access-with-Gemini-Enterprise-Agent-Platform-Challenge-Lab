@@ -123,7 +123,7 @@ genai160-Govern-Agent-Access-with-Gemini-Enterprise-Agent-Platform-Challenge-Lab
 ├── deploy.py                                             # Vertex AI Reasoning Engine deployment script
 ├── test_agent.py                                         # Multi-query validation test script
 ├── requirements.txt                                      # Root Python dependencies
-└── invoice_agent/
+└── bigquery_agent/
     ├── __init__.py                                       # Package initializer
     ├── agent.py                                          # Core ADK BigQuery agent definition
     ├── callback_logging.py                               # Cloud Logging telemetry hooks

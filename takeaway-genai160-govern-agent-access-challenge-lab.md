@@ -9,13 +9,13 @@
 
 ## 📊 Challenge Lab Scoring & Progress Matrix
 
-| Task # | Task Title | Lab Checkpoint | Points | Verification Method |
-| :---: | :--- | :--- | :---: | :--- |
-| **Task 1** | Enable Agent Engine APIs & Environment Setup | Environment Setup | — | Cloud Shell APIs active, virtualenv initialized |
-| **Task 2** | Configure & Deploy Agent Script with `AGENT_IDENTITY` | **Checkpoint 1** | **40 / 100** | `ReasoningEngine.create` with `types.IdentityType.AGENT_IDENTITY` |
-| **Task 3** | Validate Initial Access Controls (Access Denied) | Security Verification | — | Querying agent returns expected `403 Forbidden` error |
-| **Task 4** | Grant IAM Permissions to Agent Service Principal | **Checkpoint 2** | **80 / 100** | IAM policy bindings for `roles/bigquery.user` & `dataEditor` |
-| **Task 5** | Execute Business Queries & Verify Final Operation | **Checkpoint 3** | **100 / 100** | Successfully executes all 3 financial analytical queries |
+| Task # | Lab Task Title | Working Directory | Lab Checkpoint | Points | Verification Method |
+| :---: | :--- | :--- | :--- | :---: | :--- |
+| **Task 1** | Enable Agent Engine APIs & Environment Setup | `~/` | Environment Setup | — | Cloud Shell APIs active, virtualenv initialized |
+| **Task 2** | Configure & Deploy Agent with `AGENT_IDENTITY` | `bigquery_agent_installer/` | **Checkpoint 1** | **40 / 100** | `ReasoningEngine.create` with `types.IdentityType.AGENT_IDENTITY` |
+| **Task 3** | Validate Initial Access Controls (Access Denied) | `bigquery_agent_installer/` | Security Verification | — | Querying agent returns expected `403 Forbidden` error |
+| **Task 4** | Grant IAM Permissions to Agent Principal | `bigquery_agent_installer/` | **Checkpoint 2** | **80 / 100** | IAM policy bindings for `roles/bigquery.user` & `dataEditor` |
+| **Task 5** | Execute Business Queries & Verify Final Operation | `bigquery_agent_installer/` | **Checkpoint 3** | **100 / 100** | Successfully executes all 3 financial analytical queries |
 
 ---
 
@@ -30,7 +30,7 @@ sequenceDiagram
     participant BigQuery as Google BigQuery (`invoice_data.invoices`)
 
     Note over Engineer,BigQuery: Phase 1: Zero-Trust Baseline Deployment (Task 1 & 2)
-    Engineer->>Engine: 1. Deploy ADK Agent with `types.IdentityType.AGENT_IDENTITY`
+    Engineer->>Engine: 1. Deploy ADK Agent from `bigquery_agent_installer` with `types.IdentityType.AGENT_IDENTITY`
     Engine-->>Engineer: 2. Deployment Created (Checkpoint 1: 40/100)
 
     Note over Engineer,BigQuery: Phase 2: Unprivileged Baseline Access Test (Task 3)
@@ -130,18 +130,20 @@ pip install \
 
 ---
 
-### Task 2: Configure & Deploy Agent Script with `types.IdentityType.AGENT_IDENTITY`
+### Task 2: Configure & Deploy Agent Script from `bigquery_agent_installer/`
 
-In this task, you build the ADK Agent package, configure telemetry logging, and deploy the agent using the **Agent Identity** security model.
+In this task, we navigate to the `bigquery_agent_installer/` folder, configure the `bigquery_agent` package, telemetry logging, and deploy using the **Agent Identity** security model.
 
-#### Step 2.1: Create the Agent Directory Tree
+#### Step 2.1: Navigate to the `bigquery_agent_installer` Directory
 ```bash
-mkdir -p invoice_agent
+# If cloned/unpacked in Cloud Shell:
+cd bigquery_agent_installer 2>/dev/null || true
+mkdir -p bigquery_agent
 ```
 
-#### Step 2.2: Create Environment Configuration (`invoice_agent/.env`)
+#### Step 2.2: Create Environment Configuration (`bigquery_agent/.env`)
 ```bash
-cat << EOF > invoice_agent/.env
+cat << EOF > bigquery_agent/.env
 GOOGLE_CLOUD_PROJECT=${PROJECT_ID}
 GOOGLE_CLOUD_LOCATION=${LOCATION}
 MODEL=${MODEL}
@@ -150,18 +152,18 @@ DISPLAY_NAME="${DISPLAY_NAME}"
 EOF
 ```
 
-#### Step 2.3: Create Package Initializer (`invoice_agent/__init__.py`)
+#### Step 2.3: Create Package Initializer (`bigquery_agent/__init__.py`)
 ```python
-# invoice_agent/__init__.py
-"""Invoice Agent Package for GENAI160 Challenge Lab."""
+# bigquery_agent/__init__.py
+"""BigQuery Agent Package for GENAI160 Challenge Lab."""
 from .agent import root_agent
 
 __all__ = ["root_agent"]
 ```
 
-#### Step 2.4: Implement Telemetry Callbacks (`invoice_agent/callback_logging.py`)
+#### Step 2.4: Implement Telemetry Callbacks (`bigquery_agent/callback_logging.py`)
 ```python
-# invoice_agent/callback_logging.py
+# bigquery_agent/callback_logging.py
 import logging
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse, LlmRequest
@@ -183,9 +185,9 @@ def log_model_response(callback_context: CallbackContext, llm_response: LlmRespo
                 logging.info("[function call from %s]: %s", callback_context.agent_name, part.function_call.name)
 ```
 
-#### Step 2.5: Implement ADK BigQuery Agent Definition (`invoice_agent/agent.py`)
+#### Step 2.5: Implement ADK BigQuery Agent Definition (`bigquery_agent/agent.py`)
 ```python
-# invoice_agent/agent.py
+# bigquery_agent/agent.py
 import os
 import datetime
 from zoneinfo import ZoneInfo
@@ -232,7 +234,7 @@ def get_current_time():
 
 root_agent = Agent(
     model=Gemini(model=os.getenv("MODEL", "gemini-2.5-flash"), retry_options=RETRY_OPTIONS),
-    name="invoice_agent",
+    name="bigquery_invoice_agent",
     description="Agent to answer questions about BigQuery invoices, billing data, and execute SQL queries.",
     instruction=f"""
         You are an enterprise financial and invoice data analyst agent.
@@ -264,7 +266,7 @@ from dotenv import load_dotenv
 import vertexai
 from vertexai import types
 from vertexai.preview import reasoning_engines
-from invoice_agent.agent import root_agent
+from bigquery_agent.agent import root_agent
 
 load_dotenv()
 
@@ -303,7 +305,7 @@ remote_agent = reasoning_engines.ReasoningEngine.create(
     display_name=DISPLAY_NAME,
     identity_type=IDENTITY_TYPE,
     description="Agent to query and govern BigQuery invoice and billing data.",
-    extra_packages=["./invoice_agent"],
+    extra_packages=["./bigquery_agent"],
 )
 
 print("\n" + "=" * 60)
@@ -505,4 +507,4 @@ cd genai160-Govern-Agent-Access-with-Gemini-Enterprise-Agent-Platform-Challenge-
 | `AttributeError: module 'vertexai.types' has no attribute 'IdentityType'` | Using older `google-cloud-aiplatform` SDK. | Upgrade package: `pip install --upgrade "google-cloud-aiplatform[agent_engines,adk]==1.156.0"`. |
 | `403 Permission 'bigquery.jobs.create' denied` | IAM role binding has not propagated or was applied to wrong service account. | Re-run `gcloud projects add-iam-policy-binding` with `service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com` and wait 10 seconds. |
 | `404 Staging Bucket Not Found` | Staging bucket was not created in the designated region. | Create bucket with `gsutil mb -l us-central1 gs://${PROJECT_ID}-agent-staging`. |
-| `PicklingError / ModuleNotFoundError` | Subpackage `invoice_agent` not included in `extra_packages`. | Ensure `extra_packages=["./invoice_agent"]` is passed into `ReasoningEngine.create`. |
+| `PicklingError / ModuleNotFoundError` | Subpackage `bigquery_agent` not included in `extra_packages`. | Ensure `extra_packages=["./bigquery_agent"]` is passed into `ReasoningEngine.create`. |
