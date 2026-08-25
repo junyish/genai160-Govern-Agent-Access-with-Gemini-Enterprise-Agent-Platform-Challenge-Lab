@@ -211,7 +211,7 @@ echo "Agent Principal Identifier: ${AGENT_PRINCIPAL}"
 #### Method B (From Google Cloud Console):
 1. In the Google Cloud Console, navigate to **Agent Platform** (or **Vertex AI > Agent Engines / Deployments**).
 2. Click on **BigQuery Invoice Agent** under **Deployments**.
-3. Under the deployment details, copy the **Agent Identity Principal** (format: `principal://iam.googleapis.com/projects/.../locations/us-central1/reasoningEngines/...`).
+3. Under the deployment details, copy the **Agent Identity Principal** (format: `principal://agents.global.org-<ORG_ID>.system.id.goog/resources/aiplatform/projects/<PROJECT_NUMBER>/locations/us-central1/reasoningEngines/<ID>`\n*(Example: `principal://agents.global.org-616463121992.system.id.goog/resources/aiplatform/projects/1057612962708/locations/us-central1/reasoningEngines/1703351868878487552`)*).
 
 ---
 
