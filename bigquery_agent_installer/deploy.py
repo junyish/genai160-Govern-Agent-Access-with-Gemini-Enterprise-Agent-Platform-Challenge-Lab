@@ -89,19 +89,29 @@ print("This typically takes 5-10 minutes.")
 
 remote_agent = client.agent_engines.create(agent=local_agent, config=config)
 
-resource_name = getattr(remote_agent, "api_resource", None)
-resource_name_str = getattr(resource_name, "name", str(remote_agent))
+api_res = getattr(remote_agent, "api_resource", None)
+resource_name_str = getattr(api_res, "name", str(remote_agent)) if api_res else str(remote_agent)
 
-print("\nAgent deployed successfully!")
-print(f"Resource Name: {resource_name_str}")
+# Extract the Agent Identity Principal string
+agent_principal = getattr(api_res, "agent_identity", None) or getattr(api_res, "identity", None) or f"principal://iam.googleapis.com/{resource_name_str}"
+
+print("\n============================================================")
+print("🎉 Agent Deployed Successfully!")
+print(f"Resource Name:            {resource_name_str}")
+print(f"Agent Identity Principal: {agent_principal}")
+print("============================================================")
 
 with open("deployed_agent_resource.txt", "w") as f:
     f.write(resource_name_str.strip() + "\n")
 
-print("\n--- ACTION REQUIRED ---")
-print("1. In the console, open Agent Runtime (Agent Platform > Agents > Deployments)")
-print("   and find this agent's Agent Identity principal.")
-print("2. Grant that principal the roles it needs:")
-print("   - BigQuery User (roles/bigquery.user)")
-print("   - BigQuery Data Editor (roles/bigquery.dataEditor)")
-print("   See README.md for the exact steps.")
+with open("agent_principal.txt", "w") as f:
+    f.write(str(agent_principal).strip() + "\n")
+
+print("\n--- ACTION REQUIRED (Task 3: Grant IAM Roles) ---")
+print("1. In Cloud Console UI: Go to IAM & Admin > IAM > Grant Access,")
+print(f"   paste Principal: {agent_principal}")
+print("   and add roles: BigQuery User & BigQuery Data Editor.")
+print("\n2. Or run via gcloud CLI:")
+print(f"   gcloud projects add-iam-policy-binding {project} --member='{agent_principal}' --role='roles/bigquery.user'")
+print(f"   gcloud projects add-iam-policy-binding {project} --member='{agent_principal}' --role='roles/bigquery.dataEditor'")
+print("============================================================\n")

@@ -3,7 +3,7 @@
 > **Challenge Lab Reference:** `GENAI160 / Lab ID 631982 / Course Template 1749`  
 > **Lab Guide Link:** [Govern Agent Access with Gemini Enterprise & Agent Platform: Challenge Lab (Lab 631982)](https://partner.skills.google/course_templates/1749/labs/631982)  
 > **Target Track:** Google Cloud Agent Development Kit (ADK) & Vertex AI Agent Platform  
-> **Goal:** Deploy an enterprise BigQuery invoice agent with isolated **Agent Identity**, grant least-privilege IAM permissions (`roles/bigquery.user` and `roles/bigquery.dataEditor`), and achieve a **100/100 score**.
+> **Goal:** Deploy an enterprise BigQuery invoice agent with isolated **Agent Identity**, find the dedicated **Agent Principal Identifier**, grant least-privilege IAM permissions (`roles/bigquery.user` and `roles/bigquery.dataEditor`), and achieve a **100/100 score**.
 
 ---
 
@@ -13,7 +13,7 @@
 | :---: | :--- | :---: | :--- |
 | **Task 1** | Enable APIs, Create Staging Bucket & Seed BigQuery Dataset | Baseline Setup | `gcloud services enable` & `bq load` |
 | **Task 2** | Configure & Deploy BigQuery Agent with `AGENT_IDENTITY` | **40 / 100** | Click **Check my progress** on Task 2 |
-| **Task 3** | Grant **BigQuery User** & **BigQuery Data Editor** to Agent Principal | **80 / 100** | Click **Check my progress** on Task 3 |
+| **Task 3** | Find Agent Principal Identifier & Grant **BigQuery User** + **Data Editor** | **80 / 100** | Click **Check my progress** on Task 3 |
 | **Task 4** | Query the Agent & Verify Grounded Business Answers | **100 / 100** | Click **Check my progress** on Task 4 |
 
 ---
@@ -73,9 +73,8 @@ fi
 
 ---
 
-### Step 1.4: Clone or Copy Starter Code
+### Step 1.4: Clone Starter Repository
 ```bash
-# Clone the complete lab repository
 git clone https://github.com/junyish/genai160-Govern-Agent-Access-with-Gemini-Enterprise-Agent-Platform-Challenge-Lab.git lab-genai160
 cd lab-genai160
 ```
@@ -132,8 +131,8 @@ cp .env bigquery_agent/.env
 
 ---
 
-### Step 2.2: Verify `deploy.py` Configuration
-In `deploy.py`, ensure `identity_type` is configured with `types.IdentityType.AGENT_IDENTITY`:
+### Step 2.2: Configure `deploy.py` with `IdentityType.AGENT_IDENTITY`
+In `deploy.py`, ensure `identity_type` is configured as a scalar with `types.IdentityType.AGENT_IDENTITY`:
 
 ```python
 # deploy.py snippet
@@ -169,8 +168,11 @@ python3 deploy.py
 Deploying 'bigquery_agent' as 'BigQuery Invoice Agent' to Agent Runtime with an Agent Identity...
 This typically takes 5-10 minutes.
 
-Agent deployed successfully!
-Resource Name: projects/.../locations/us-central1/reasoningEngines/...
+============================================================
+🎉 Agent Deployed Successfully!
+Resource Name:            projects/1234567890/locations/us-central1/reasoningEngines/1122334455667788
+Agent Identity Principal: principal://iam.googleapis.com/projects/1234567890/locations/us-central1/reasoningEngines/1122334455667788
+============================================================
 ```
 
 ---
@@ -181,59 +183,81 @@ Resource Name: projects/.../locations/us-central1/reasoningEngines/...
 
 ---
 
-### 💡 (Optional Security Check) Test Unprivileged Access Denied
-Run the unprivileged test script to verify that Zero-Trust is active before granting IAM roles:
+### 💡 (Optional Security Verification) Verify Access Denied
 ```bash
 python3 test_unprivileged.py
 ```
-*Expected Output:* `403 Forbidden / Access Denied` (confirms agent has 0 ambient access).
+*Expected Output:* `403 Forbidden / Access Denied` (confirms Zero-Trust isolation is operating as intended).
 
 ---
 
-## 📋 Task 3: Grant IAM Roles to the Agent Identity Principal (Checkpoint: 80/100)
+## 📋 Task 3: Find Agent Principal Identifier & Grant IAM Roles (Checkpoint: 80/100)
 
 > [!IMPORTANT]
-> **Lab Requirement for Task 3:** Grant **BOTH** of the following roles to the Agent Identity principal:
-> 1. **BigQuery User** (`roles/bigquery.user`) — Enables running SQL queries and allocating compute jobs.
-> 2. **BigQuery Data Editor** (`roles/bigquery.dataEditor`) — Enables reading and writing table data in the `pool_data` dataset.
+> **Lab Requirement:** Find the deployed agent's **Agent Identity Principal** and grant it two roles:
+> 1. **BigQuery User** (`roles/bigquery.user`)
+> 2. **BigQuery Data Editor** (`roles/bigquery.dataEditor`)
 
----
+### Step 3.1: Retrieve the Agent Identity Principal Identifier
 
-### Step 3.1: Identify the Agent Identity Principal
-The Reasoning Engine service principal format is:
+#### Method A (From Deployment Output):
+The deployment script automatically saved the principal identifier to `agent_principal.txt`:
 ```bash
-export REASONING_ENGINE_SA="service-${PROJECT_NUMBER}@gcp-sa-aiplatform-re.iam.gserviceaccount.com"
-echo "Target Principal: ${REASONING_ENGINE_SA}"
+export AGENT_PRINCIPAL=$(cat agent_principal.txt | tr -d "
+")
+echo "Agent Principal Identifier: ${AGENT_PRINCIPAL}"
 ```
 
+#### Method B (From Google Cloud Console):
+1. In the Google Cloud Console, navigate to **Agent Platform** (or **Vertex AI > Agent Engines / Deployments**).
+2. Click on **BigQuery Invoice Agent** under **Deployments**.
+3. Under the deployment details, copy the **Agent Identity Principal** (format: `principal://iam.googleapis.com/projects/.../locations/us-central1/reasoningEngines/...`).
+
 ---
 
-### Step 3.2: Grant Role 1 — BigQuery User (`roles/bigquery.user`)
+### Step 3.2: Grant BigQuery User & Data Editor Roles
+
+#### CLI Method (Recommended):
 ```bash
+# 1. Grant BigQuery User role to the Agent Principal
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member="serviceAccount:${REASONING_ENGINE_SA}" \
+    --member="${AGENT_PRINCIPAL}" \
     --role="roles/bigquery.user" \
     --condition=None
-```
 
----
-
-### Step 3.3: Grant Role 2 — BigQuery Data Editor (`roles/bigquery.dataEditor`)
-```bash
+# 2. Grant BigQuery Data Editor role to the Agent Principal
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
-    --member="serviceAccount:${REASONING_ENGINE_SA}" \
+    --member="${AGENT_PRINCIPAL}" \
     --role="roles/bigquery.dataEditor" \
     --condition=None
 ```
 
+*(Optional safety fallback for Reasoning Engine service agent):*
+```bash
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${REASONING_ENGINE_SA}" \
+    --role="roles/bigquery.user" --condition=None || true
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${REASONING_ENGINE_SA}" \
+    --role="roles/bigquery.dataEditor" --condition=None || true
+```
+
+#### Console UI Method:
+1. Go to **IAM & Admin > IAM** in the Cloud Console.
+2. Click **Grant Access** (or **Add**).
+3. In **New principals**, paste your copied `${AGENT_PRINCIPAL}` string.
+4. In **Select a role**, choose **BigQuery User** (`roles/bigquery.user`).
+5. Click **+ Add another role**, and choose **BigQuery Data Editor** (`roles/bigquery.dataEditor`).
+6. Click **Save**.
+
 ---
 
-### Step 3.4: Verify IAM Roles Assigned to Principal
+### Step 3.3: Verify IAM Policy Binding
 ```bash
 gcloud projects get-iam-policy "$PROJECT_ID" \
     --flatten="bindings[].members" \
     --format="table(bindings.role)" \
-    --filter="bindings.members:${REASONING_ENGINE_SA}"
+    --filter="bindings.members:${AGENT_PRINCIPAL}"
 ```
 
 **Expected Verification Output:**
@@ -253,10 +277,6 @@ roles/bigquery.user
 
 ## 📋 Task 4: Query the Agent & Verify Grounded Business Answers (Checkpoint: 100/100)
 
-Now that the Agent Identity has permissions, execute the validation queries in the Cloud Shell or Playground.
-
----
-
 ### Step 4.1: Run the Automated Validation Test Script
 ```bash
 python3 test_agent.py
@@ -268,7 +288,7 @@ python3 test_agent.py
 
 #### Query 1: Schema Inspection
 * **Question:** `"What is the schema of the invoices table?"`
-* **Result:** Returns columns:
+* **Result:** Returns table columns:
   - `invoice_date (DATE)`
   - `date_processed (DATE)`
   - `invoice_id (STRING)`

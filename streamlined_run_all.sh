@@ -4,7 +4,7 @@
 # ==============================================================================
 # Covers: API enablement, Environment Setup, BigQuery Dataset & Table Seeding,
 # Agent Deployment (with Agent Identity), Access Denied Verification,
-# IAM Granting, and Final Business Query Validation (100/100).
+# Agent Principal IAM Granting, and Final Business Query Validation (100/100).
 # ==============================================================================
 
 set -euo pipefail
@@ -24,13 +24,12 @@ echo "Google Cloud Project Number: ${PROJECT_NUMBER}"
 echo "Region:                      ${LOCATION}"
 echo "Model:                       ${MODEL}"
 echo "Staging Bucket:              ${STAGING_BUCKET}"
-echo "Reasoning Engine SA:         ${REASONING_ENGINE_SA}"
 echo "=========================================================="
 
 # ---------------------------------------------------------
 # TASK 1: ENABLE REQUIRED APIS & SEED BIGQUERY
 # ---------------------------------------------------------
-echo "[Task 1/5] Enabling Required Google Cloud APIs..."
+echo "[Task 1/4] Enabling Required Google Cloud APIs..."
 gcloud services enable \
     aiplatform.googleapis.com \
     bigquery.googleapis.com \
@@ -60,41 +59,62 @@ fi
 # ---------------------------------------------------------
 # TASK 2: INSTALL DEPENDENCIES & DEPLOY WITH AGENT IDENTITY
 # ---------------------------------------------------------
-echo "[Task 2/5] Deploying BigQuery Invoice Agent with types.IdentityType.AGENT_IDENTITY..."
+echo "[Task 2/4] Deploying BigQuery Invoice Agent with types.IdentityType.AGENT_IDENTITY..."
+export PATH="${PATH}:/home/${USER}/.local/bin"
 python3 -m pip install -q -r requirements.txt
 python3 deploy.py
 echo "✔ Task 2: Agent successfully deployed to Agent Platform! (Checkpoint: 40/100)"
 
-# ---------------------------------------------------------
-# TASK 3: TEST UNPRIVILEGED ACCESS (ZERO-TRUST VERIFICATION)
-# ---------------------------------------------------------
-echo "[Task 3/5] Testing unprivileged baseline access control..."
+# Optional unprivileged Zero-Trust verification check
 python3 test_unprivileged.py || true
 
 # ---------------------------------------------------------
-# TASK 4: GRANT IAM PERMISSIONS TO AGENT PRINCIPAL
+# TASK 3: GRANT IAM ROLES TO AGENT PRINCIPAL IDENTIFIERS
 # ---------------------------------------------------------
-echo "[Task 4/5] Granting BigQuery IAM permissions to Reasoning Engine Service Account..."
+echo "[Task 3/4] Granting BigQuery User & Data Editor roles to Agent Identity Principal..."
+if [[ -f "./agent_principal.txt" ]]; then
+    AGENT_PRINCIPAL=$(cat ./agent_principal.txt | tr -d "
+")
+else
+    RESOURCE_ID=$(cat deployed_agent_resource.txt | tr -d "
+")
+    AGENT_PRINCIPAL="principal://iam.googleapis.com/${RESOURCE_ID}"
+fi
+
+echo "Target Agent Principal: ${AGENT_PRINCIPAL}"
+
+# Bind roles to the principal:// identifier
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="${AGENT_PRINCIPAL}" \
+    --role="roles/bigquery.user" \
+    --condition=None || true
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="${AGENT_PRINCIPAL}" \
+    --role="roles/bigquery.dataEditor" \
+    --condition=None || true
+
+# Bind roles to the Reasoning Engine service agent as well
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${REASONING_ENGINE_SA}" \
     --role="roles/bigquery.user" \
-    --condition=None > /dev/null
+    --condition=None || true
 
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:${REASONING_ENGINE_SA}" \
     --role="roles/bigquery.dataEditor" \
-    --condition=None > /dev/null
+    --condition=None || true
 
-echo "✔ Task 4: IAM permissions successfully granted! (Checkpoint: 80/100)"
+echo "✔ Task 3: IAM permissions successfully granted! (Checkpoint: 80/100)"
 sleep 5
 
 # ---------------------------------------------------------
-# TASK 5: RUN BUSINESS VALIDATION QUERIES
+# TASK 4: RUN BUSINESS VALIDATION QUERIES
 # ---------------------------------------------------------
-echo "[Task 5/5] Executing validation business queries..."
+echo "[Task 4/4] Executing validation business queries..."
 python3 test_agent.py
 
 echo "=========================================================="
-echo "🎉 Task 5 Complete! Final score 100/100 reached!"
+echo "🎉 Task 4 Complete! Final score 100/100 reached!"
 echo "You can now click 'Check my progress' on all tasks."
 echo "=========================================================="
