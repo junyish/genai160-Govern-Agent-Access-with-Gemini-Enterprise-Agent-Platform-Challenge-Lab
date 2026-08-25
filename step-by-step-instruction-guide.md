@@ -161,7 +161,7 @@ IDENTITY_TYPE = types.IdentityType.AGENT_IDENTITY
 
 config = {
     "display_name": DISPLAY_NAME,
-    "identity_type": [IDENTITY_TYPE],
+    "identity_type": IDENTITY_TYPE,
     "staging_bucket": STAGING_BUCKET,
     "python_version": "3.12",
     "requirements": requirements,
@@ -193,7 +193,7 @@ Below is the side-by-side comparison between the lab template placeholder and ou
 +
 + config = {
 +     "display_name": DISPLAY_NAME,
-+     "identity_type": [IDENTITY_TYPE],
++     "identity_type": IDENTITY_TYPE,
 +     "staging_bucket": STAGING_BUCKET,
 +     "python_version": "3.12",
 +     "requirements": requirements,

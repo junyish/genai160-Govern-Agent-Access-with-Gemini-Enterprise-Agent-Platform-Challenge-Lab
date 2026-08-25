@@ -72,7 +72,7 @@ STAGING_BUCKET = os.environ.get("STAGING_BUCKET", f"gs://{project}-bucket")
 config = {
     "display_name": DISPLAY_NAME,
     # Give the agent its own identity rather than a shared service account.
-    "identity_type": [IDENTITY_TYPE],
+    "identity_type": IDENTITY_TYPE,
     "staging_bucket": STAGING_BUCKET,
     "python_version": "3.12",
     "requirements": requirements,
