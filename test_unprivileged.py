@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Copyright 2026 Google LLC
 import os
 import sys
 from dotenv import load_dotenv
@@ -13,6 +14,9 @@ LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 if not PROJECT_ID:
     sys.exit("ERROR: GOOGLE_CLOUD_PROJECT is not set.")
 
+if not os.path.exists("deployed_agent_resource.txt"):
+    sys.exit("ERROR: deployed_agent_resource.txt not found. Run deploy.py first.")
+
 with open("deployed_agent_resource.txt", "r") as f:
     RE_RESOURCE_NAME = f.read().strip()
 
@@ -23,13 +27,10 @@ remote_agent = reasoning_engines.ReasoningEngine(RE_RESOURCE_NAME)
 print("Executing test query PRIOR to IAM role binding (Task 3)...")
 try:
     response = remote_agent.query(input="What is the schema of the invoice table?")
-    print("Unexpected Success:
-", response)
+    print("Unexpected Success:", response)
 except Exception as e:
-    print("
-========================================================")
+    print("\n========================================================")
     print("✔ Expected 403 Forbidden / Access Denied Encountered:")
     print("========================================================")
     print(e)
-    print("
-This confirms that the agent runtime is securely quarantined under Zero-Trust!")
+    print("\nThis confirms that the agent runtime is securely quarantined under Zero-Trust!")

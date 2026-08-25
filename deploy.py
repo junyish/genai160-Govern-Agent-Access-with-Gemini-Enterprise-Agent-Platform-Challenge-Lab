@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,63 +14,64 @@
 
 """Deploy ONLY the bigquery_agent to Agent Runtime with an Agent Identity.
 
+This is a trimmed copy of the full lab's deploy.py, hardcoded to the single
+agent this installer cares about. Run it from this directory (install.sh does
+this for you):
+
+    python3 deploy.py
+
 The deployed agent is given a unique Agent Identity (a SPIFFE-based principal)
 instead of sharing a service account. That principal starts with NO access to
 your data, which is why BigQuery calls are denied until you grant it the
-roles/bigquery.user and roles/bigquery.dataEditor roles (see Task 3 & 4).
+roles/bigquery.user and roles/bigquery.dataEditor roles (see README.md).
+
+Optional environment variables (also read from a local .env):
+    GOOGLE_CLOUD_LOCATION   Region for the agent (default: us-central1).
+    MODEL                   Gemini model id (default: gemini-2.5-flash).
 """
 
 import os
 import sys
+
 from dotenv import load_dotenv
 
 import vertexai
 from vertexai._genai import types
 
+# Load .env (written by install.sh) so the project, location, and model are
+# available both here and when the agent module is imported below.
 load_dotenv()
 
-PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("PROJECT_ID")
-LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
-DISPLAY_NAME = os.getenv("DISPLAY_NAME", "BigQuery Invoice Agent")
-MODEL_VERSION = os.getenv("MODEL", "gemini-2.5-flash")
+project = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("PROJECT_ID")
+location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+MODEL_VERSION = os.environ.get("MODEL", "gemini-2.5-flash")
 
-if not PROJECT_ID:
-    sys.exit("ERROR: GOOGLE_CLOUD_PROJECT is not set. Run: gcloud config set project <PROJECT_ID>")
+if not project:
+    sys.exit("GOOGLE_CLOUD_PROJECT is not set. Run: gcloud config set project <PROJECT_ID>")
 
-STAGING_BUCKET = os.getenv("STAGING_BUCKET", f"gs://{PROJECT_ID}-bucket")
 AGENT_PACKAGE = "bigquery_agent"
+DISPLAY_NAME = os.environ.get("DISPLAY_NAME", "BigQuery Invoice Agent")
 
 # ==============================================================================
-# IDENTITY_TYPE: Deploy using dedicated Agent Identity (Zero-Trust)
+# IDENTITY_TYPE: Replace the placeholder with types.IdentityType.AGENT_IDENTITY
 # ==============================================================================
 IDENTITY_TYPE = types.IdentityType.AGENT_IDENTITY
 
-# Import the root_agent object from the bigquery_agent package
+# Import the root_agent object from the bigquery_agent package.
 from bigquery_agent.agent import root_agent as local_agent
 
-# Read the agent's deployment requirements from its requirements.txt
-req_path = os.path.join(AGENT_PACKAGE, "requirements.txt")
-if os.path.exists(req_path):
-    with open(req_path) as f:
-        requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-else:
-    requirements = [
-        "google-adk==2.2.0",
-        "google-genai==2.8.0",
-        "google-cloud-aiplatform[agent_engines]==1.157.0",
-        "cloudpickle==3.1.2",
-        "google-cloud-bigquery==3.41.0",
-        "google-auth==2.53.0",
-        "google-cloud-logging",
-        "python-dotenv",
-    ]
+# Read the agent's deployment requirements from its requirements.txt.
+with open(os.path.join(AGENT_PACKAGE, "requirements.txt")) as f:
+    requirements = [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
-print(f"Initializing Vertex AI SDK for project '{PROJECT_ID}' in location '{LOCATION}'...")
-vertexai.init(project=PROJECT_ID, location=LOCATION)
-client = vertexai.Client(project=PROJECT_ID, location=LOCATION)
+vertexai.init(project=project, location=location)
+client = vertexai.Client(project=project, location=location)
+
+STAGING_BUCKET = os.environ.get("STAGING_BUCKET", f"gs://{project}-bucket")
 
 config = {
     "display_name": DISPLAY_NAME,
+    # Give the agent its own identity rather than a shared service account.
     "identity_type": [IDENTITY_TYPE],
     "staging_bucket": STAGING_BUCKET,
     "python_version": "3.12",
@@ -79,35 +79,30 @@ config = {
     "extra_packages": [f"./{AGENT_PACKAGE}"],
     "env_vars": {
         "GOOGLE_GENAI_USE_VERTEXAI": os.environ.get("GOOGLE_GENAI_USE_VERTEXAI", "TRUE"),
-        "GOOGLE_CLOUD_LOCATION": LOCATION,
-        "MODEL": MODEL_VERSION,
-        "GOOGLE_CLOUD_PROJECT": PROJECT_ID,
+        "GOOGLE_CLOUD_LOCATION": location,
+        "MODEL": os.environ.get("MODEL", MODEL_VERSION),
+        "GOOGLE_CLOUD_PROJECT": project,
     },
 }
 
-print(f"Deploying '{AGENT_PACKAGE}' as '{DISPLAY_NAME}' to Agent Runtime with Agent Identity ({IDENTITY_TYPE})...")
-print("This typically takes 3-7 minutes.")
+print(f"Deploying '{AGENT_PACKAGE}' as '{DISPLAY_NAME}' to Agent Runtime with an Agent Identity...")
+print("This typically takes 5-10 minutes.")
 
-try:
-    remote_agent = client.agent_engines.create(agent=local_agent, config=config)
-    res_name = getattr(remote_agent, "api_resource", None)
-    res_name = getattr(res_name, "name", str(remote_agent))
-except Exception as e:
-    print(f"client.agent_engines.create failed ({e}). Attempting fallback with reasoning_engines.ReasoningEngine.create...")
-    from vertexai.preview import reasoning_engines
-    remote_agent = reasoning_engines.ReasoningEngine.create(
-        reasoning_engines.AdkApp(agent=local_agent),
-        requirements=requirements,
-        display_name=DISPLAY_NAME,
-        extra_packages=[f"./{AGENT_PACKAGE}"],
-    )
-    res_name = remote_agent.resource_name
+remote_agent = client.agent_engines.create(agent=local_agent, config=config)
 
-print("\n" + "=" * 60)
-print("🎉 Agent Deployed Successfully!")
-print(f"Resource Name: {res_name}")
-print("=" * 60)
+resource_name = getattr(remote_agent, "api_resource", None)
+resource_name_str = getattr(resource_name, "name", str(remote_agent))
+
+print("\nAgent deployed successfully!")
+print(f"Resource Name: {resource_name_str}")
 
 with open("deployed_agent_resource.txt", "w") as f:
-    f.write(str(res_name).strip() + "\n")
-print("Saved resource name to 'deployed_agent_resource.txt'\n")
+    f.write(resource_name_str.strip() + "\n")
+
+print("\n--- ACTION REQUIRED ---")
+print("1. In the console, open Agent Runtime (Agent Platform > Agents > Deployments)")
+print("   and find this agent's Agent Identity principal.")
+print("2. Grant that principal the roles it needs:")
+print("   - BigQuery User (roles/bigquery.user)")
+print("   - BigQuery Data Editor (roles/bigquery.dataEditor)")
+print("   See README.md for the exact steps.")

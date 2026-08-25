@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
-"""
-Test script to interact with deployed BigQuery Invoice Agent on Vertex AI.
-"""
-
+# Copyright 2026 Google LLC
 import os
 import sys
 from dotenv import load_dotenv
@@ -15,19 +12,13 @@ PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("PROJECT_ID")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 if not PROJECT_ID:
-    raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required.")
+    sys.exit("ERROR: GOOGLE_CLOUD_PROJECT is not set.")
 
-# Read deployed resource name
-resource_file = "deployed_agent_resource.txt"
-if os.path.exists(resource_file):
-    with open(resource_file, "r") as f:
-        RE_RESOURCE_NAME = f.read().strip()
-else:
-    RE_RESOURCE_NAME = os.getenv("REASONING_ENGINE_RESOURCE_NAME")
+if not os.path.exists("deployed_agent_resource.txt"):
+    sys.exit("ERROR: deployed_agent_resource.txt not found. Run deploy.py first.")
 
-if not RE_RESOURCE_NAME:
-    print("Error: No reasoning engine resource specified. Provide via deployed_agent_resource.txt or REASONING_ENGINE_RESOURCE_NAME.")
-    sys.exit(1)
+with open("deployed_agent_resource.txt", "r") as f:
+    RE_RESOURCE_NAME = f.read().strip()
 
 print(f"Connecting to Reasoning Engine: {RE_RESOURCE_NAME}...")
 vertexai.init(project=PROJECT_ID, location=LOCATION)
@@ -40,9 +31,16 @@ queries = [
 ]
 
 for idx, q in enumerate(queries, 1):
-    print(f"\n--- [Query {idx}] {q} ---")
+    print("\n" + "=" * 60)
+    print(f"🧪 [Query {idx}/3] {q}")
+    print("=" * 60)
     try:
         response = remote_agent.query(input=q)
-        print("Agent Response:\n", response)
+        print("\n🤖 Agent Grounded Response:\n", response)
     except Exception as e:
-        print(f"❌ Query execution error (May indicate missing IAM permissions): {e}")
+        print(f"\n❌ Error executing query: {e}")
+        sys.exit(1)
+
+print("\n" + "=" * 60)
+print("🎉 All 3 Business Queries Executed Successfully!")
+print("=" * 60)
