@@ -20,6 +20,7 @@ Deployment script for BigQuery Invoice Agent on Vertex AI Agent Engine.
 import os
 from dotenv import load_dotenv
 import vertexai
+from vertexai import types
 from vertexai.preview import reasoning_engines
 from invoice_agent.agent import root_agent
 
@@ -29,6 +30,14 @@ PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("PROJECT_ID")
 LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 STAGING_BUCKET = os.getenv("STAGING_BUCKET")
 DISPLAY_NAME = os.getenv("DISPLAY_NAME", "BigQuery Invoice Agent")
+
+# ==============================================================================
+# IDENTITY_TYPE: Deploy the agent using dedicated Agent Identity
+# ==============================================================================
+try:
+    IDENTITY_TYPE = types.IdentityType.AGENT_IDENTITY
+except AttributeError:
+    IDENTITY_TYPE = "AGENT_IDENTITY"
 
 if not PROJECT_ID:
     raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required.")
@@ -40,7 +49,7 @@ vertexai.init(
     staging_bucket=STAGING_BUCKET,
 )
 
-print(f"Deploying '{DISPLAY_NAME}' to Vertex AI Agent Engines (Reasoning Engine)...")
+print(f"Deploying '{DISPLAY_NAME}' to Vertex AI Agent Engines with IDENTITY_TYPE={IDENTITY_TYPE}...")
 remote_agent = reasoning_engines.ReasoningEngine.create(
     reasoning_engines.AdkApp(agent=root_agent),
     requirements=[
@@ -53,6 +62,7 @@ remote_agent = reasoning_engines.ReasoningEngine.create(
         "google-cloud-logging",
     ],
     display_name=DISPLAY_NAME,
+    identity_type=IDENTITY_TYPE,
     description="Agent to query and govern BigQuery invoice and billing data.",
     extra_packages=["./invoice_agent"],
 )

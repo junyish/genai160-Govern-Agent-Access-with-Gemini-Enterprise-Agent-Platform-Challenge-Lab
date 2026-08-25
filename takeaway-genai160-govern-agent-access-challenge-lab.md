@@ -205,10 +205,16 @@ root_agent = Agent(
 ```
 
 #### 2.4 Create Deployment Script (`deploy.py`)
+
+> [!IMPORTANT]
+> **Lab Instruction Directive:** *`IDENTITY_TYPE: Replace the placeholder with the appropriate value from types.IdentityType to deploy the agent using an Agent Identity.`*  
+> The required value is **`types.IdentityType.AGENT_IDENTITY`**. This instructs Vertex AI Agent Platform to provision a dedicated SPIFFE cryptographic agent identity rather than a shared generic identity.
+
 ```python
 import os
 from dotenv import load_dotenv
 import vertexai
+from vertexai import types
 from vertexai.preview import reasoning_engines
 from invoice_agent.agent import root_agent
 
@@ -219,6 +225,11 @@ LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 STAGING_BUCKET = os.getenv("STAGING_BUCKET")
 DISPLAY_NAME = os.getenv("DISPLAY_NAME", "BigQuery Invoice Agent")
 
+# ==============================================================================
+# IDENTITY_TYPE: Deploy the agent using dedicated Agent Identity
+# ==============================================================================
+IDENTITY_TYPE = types.IdentityType.AGENT_IDENTITY
+
 print(f"Initializing Vertex AI SDK for project: {PROJECT_ID}, location: {LOCATION}...")
 vertexai.init(
     project=PROJECT_ID,
@@ -226,7 +237,7 @@ vertexai.init(
     staging_bucket=STAGING_BUCKET,
 )
 
-print(f"Deploying {DISPLAY_NAME} to Vertex AI Agent Engines...")
+print(f"Deploying '{DISPLAY_NAME}' to Vertex AI Agent Engines with IDENTITY_TYPE={IDENTITY_TYPE}...")
 remote_agent = reasoning_engines.ReasoningEngine.create(
     reasoning_engines.AdkApp(agent=root_agent),
     requirements=[
@@ -239,6 +250,7 @@ remote_agent = reasoning_engines.ReasoningEngine.create(
         "google-cloud-logging",
     ],
     display_name=DISPLAY_NAME,
+    identity_type=IDENTITY_TYPE,
     description="Agent to query and govern BigQuery invoice and billing data.",
     extra_packages=["./invoice_agent"],
 )
